@@ -1,0 +1,577 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>🔮 数当て占い — 心を読み透かす版</title>
+<style>
+  :root{
+    --bg:#0b1020; --panel:#151a2e; --text:#eef3ff; --muted:#9aa7ca;
+    --yes:#24d26a; --no:#ff4d6d; --accent:#7c5cff; --accent2:#19c3ff;
+  }
+  *{box-sizing:border-box}
+  html, body{ overflow-x:hidden; }
+  body{
+    margin:0; min-height:100svh; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(120% 150% at 50% -10%, #1a265a 0%, transparent 60%), #0b1020;
+    color:var(--text); font-family: "Inter","Hiragino Kaku Gothic ProN","Meiryo",system-ui;
+    padding:18px;
+  }
+  .app{ width:min(1280px,96vw); border-radius:24px; border:1px solid rgba(255,255,255,.08);
+        background:linear-gradient(180deg, rgba(255,255,255,.05), rgba(255,255,255,.02));
+        box-shadow: 0 30px 80px rgba(0,0,0,.45); overflow:hidden;}
+  header{ display:flex; gap:14px; align-items:center; padding:20px 22px;
+          background:linear-gradient(180deg, rgba(124,92,255,.12), transparent); }
+  h1{ font-size:22px; margin:0 }
+  .sub{ color:var(--muted); font-size:13px }
+  main{ padding:20px }
+  .panel{ background:var(--panel); border:1px solid rgba(255,255,255,.06);
+          border-radius:18px; padding:18px; }
+  .controls{ display:flex; gap:12px; flex-wrap:wrap; margin-top:14px }
+  .btn{ appearance:none; border:none; border-radius:12px; padding:14px 18px;
+        font-weight:700; letter-spacing:.03em; cursor:pointer; transition:.2s;
+        background:#1f2542; color:var(--text); border:1px solid rgba(255,255,255,.06); }
+  .btn:hover{ transform:translateY(-1px) }
+  .btn:active{ transform:translateY(0) }
+  .primary{ background:linear-gradient(135deg, var(--accent), var(--accent2)); color:#fff }
+  .yes{ background:linear-gradient(135deg, #1ac66d, #17a95d); color:#fff }
+  .no{ background:linear-gradient(135deg, #ff4d6d, #e23b5a); color:#fff }
+  .ghost{ background:transparent; border:1px dashed rgba(255,255,255,.2); color:var(--muted) }
+  .meta{ display:flex; align-items:center; justify-content:space-between; color:var(--muted); font-size:13px }
+  .bar{ height:8px; border-radius:999px; background:#0f1330; border:1px solid rgba(255,255,255,.06); overflow:hidden; width:56% }
+  .fill{ height:100%; width:0%; background:linear-gradient(90deg, var(--accent), var(--accent2)); transition:width .35s }
+
+  .howbox{
+    margin-top:14px;
+    padding:14px;
+    border-radius:14px;
+    background:#0f1430;
+    border:1px solid rgba(255,255,255,.08);
+    color:#c9d4ff;
+    line-height:1.8;
+    font-size:14px;
+  }
+  .howbox strong{ color:#fff; }
+
+  .rows{ display:flex; flex-direction:column; gap:10px; margin-top:14px;
+         max-height:380px; overflow-y:auto; overflow-x:hidden; padding:6px; background:#0f1430; border-radius:12px;
+         border:1px solid rgba(255,255,255,.06) }
+  .row{ display:grid; grid-template-columns: 92px 1fr; align-items:start; gap:8px }
+  .rowlabel{ color:var(--muted); font-size:12px; padding:6px 8px; border:1px dashed rgba(255,255,255,.1);
+             border-radius:10px; text-align:center; white-space:nowrap; background:#0f1330; }
+  .rowgrid{ display:grid; grid-template-columns: repeat(10, minmax(40px, 1fr)); gap:8px }
+
+  .num{ padding:8px 0; border-radius:10px; text-align:center;
+        background:linear-gradient(180deg, #18204a, #12183a); border:1px solid rgba(255,255,255,.06); font-weight:600;
+        animation: fade .35s ease both }
+  .type{ min-height:52px; line-height:1.7 }
+  .fade{ animation: fade .5s ease both }
+  @keyframes fade{ from{ opacity:0; transform: translateY(6px) } to{ opacity:1; transform:none } }
+  .crystal{ width:62px; height:62px; border-radius:50%;
+            background: radial-gradient(circle at 30% 30%, #fff 0%, #b6a2ff 25%, #7c5cff 55%, #3d2d86 100%);
+            box-shadow: 0 0 20px rgba(124,92,255,.7), 0 0 38px rgba(25,195,255,.35);
+            position:relative; animation: float 4s ease-in-out infinite, glow 2.2s ease-in-out infinite; flex-shrink:0 }
+  .crystal::after{ content:""; position:absolute; inset:-7px; border-radius:50%;
+                   box-shadow: 0 0 40px rgba(124,92,255,.35) inset; }
+  @keyframes float { 0%{transform:translateY(0)} 50%{transform:translateY(-6px)} 100%{transform:translateY(0)} }
+  @keyframes glow { 0%,100%{ filter:brightness(1) } 50%{ filter:brightness(1.2) } }
+  .drum{ font-size:14px; color:var(--muted); letter-spacing:.2em; animation: drum 1s steps(12) infinite; display:inline-block; margin-top:6px }
+  @keyframes drum{ 0%{opacity:.4} 50%{opacity:1} 100%{opacity:.4} }
+  .answer{ font-size:40px; font-weight:900; margin:8px 0 0; text-shadow:0 8px 28px rgba(124,92,255,.35) }
+  .fortune{ color:#c9d4ff; margin-top:6px }
+  .hidden{ display:none }
+  canvas#confetti{ position:fixed; inset:0; pointer-events:none }
+
+  @media (max-width: 680px){
+    body{ padding:10px; align-items:flex-start; }
+    header{ padding:16px; }
+    main{ padding:14px; }
+    h1{ font-size:19px; }
+    .sub{ font-size:12px; }
+    .panel{ padding:14px; }
+    .crystal{ width:52px; height:52px; }
+    .row{ grid-template-columns: 1fr; }
+    .rowlabel{ text-align:left; }
+    .rowgrid{ grid-template-columns: repeat(5, 1fr); gap:6px; }
+    .num{ padding:8px 0; font-size:14px; }
+    .bar{ width:48%; }
+    .rows{ max-height:420px; }
+  }
+</style>
+</head>
+<body>
+<canvas id="confetti"></canvas>
+<div class="app">
+  <header>
+    <div class="crystal" aria-hidden="true"></div>
+    <div>
+      <h1>🔮 数当て占い（はい・いいえ）</h1>
+      <div class="sub">あなたが心に決めた数字を、私は読み透かします…</div>
+    </div>
+  </header>
+
+  <main>
+    <section class="panel" id="introSec">
+      <div id="intro" class="type"></div>
+      <div class="controls">
+        <button id="start" class="btn primary">はじめる</button>
+        <button id="how" class="btn ghost">あそび方</button>
+        <button id="mute" class="btn ghost" aria-pressed="false">🔈 サウンドON/OFF</button>
+      </div>
+
+      <div id="howText" class="howbox hidden">
+        <strong>遊び方</strong><br>
+        ① ひとつ数字を心の中で決めてください。<br>
+        ② 表示されるカードに、その数字があるかをしっかり確認します。<br>
+        ③ 数字があれば「はい」、なければ「いいえ」を押してください。<br>
+        ④ すべて答えると、あなたのこころがうつしだされます。
+      </div>
+    </section>
+
+    <section id="qa" class="panel hidden">
+      <div class="meta">
+        <div>質問 <span id="step">1</span> / 9</div>
+        <div class="bar"><div id="fill" class="fill"></div></div>
+      </div>
+      <div id="prompt" class="type fade">このカードにあなたの数字はありますか？</div>
+
+      <div id="rows" class="rows"></div>
+
+      <div class="controls">
+        <button id="yes" class="btn yes">はい</button>
+        <button id="no" class="btn no">いいえ</button>
+      </div>
+    </section>
+
+    <section id="final" class="panel hidden">
+      <div class="type fade">ふむ……水晶が震えています…… <span class="drum">ドゥルルル…</span></div>
+      <div id="answer" class="answer">0</div>
+      <div id="fortune" class="fortune"></div>
+      <div class="controls" style="justify-content:center">
+        <button id="again" class="btn">もう一度</button>
+      </div>
+    </section>
+  </main>
+</div>
+
+<script>
+const QUESTION_COUNT = 9;
+const MAX_NUMBER = Math.pow(2, QUESTION_COUNT) - 1;
+const RANGE_SIZE = 20;
+
+const AudioCtx = window.AudioContext || window.webkitAudioContext;
+let actx, muted=false;
+
+function ensureAudio(){
+  if(!actx){
+    actx = new AudioCtx();
+  }
+}
+
+function ping({freq=660,dur=0.07,gain=0.06,type="sine"}={}){
+  if(muted||!actx) return;
+  const t=actx.currentTime;
+  const osc=actx.createOscillator();
+  const g=actx.createGain();
+  osc.type=type;
+  osc.frequency.setValueAtTime(freq,t);
+  g.gain.value=gain;
+  osc.connect(g).connect(actx.destination);
+  osc.start();
+  osc.stop(t+dur);
+}
+
+function drumroll(ms=1200){
+  if(muted||!actx) return;
+  const t0=actx.currentTime;
+  const n=actx.createOscillator();
+  const g=actx.createGain();
+  n.type="triangle";
+  g.gain.value=0.0001;
+  n.connect(g).connect(actx.destination);
+  n.start();
+  const steps=24;
+  for(let i=0;i<steps;i++){
+    const tt=t0+(i/steps)*(ms/1000);
+    g.gain.exponentialRampToValueAtTime(0.0001+i*i*0.0004, tt);
+    n.frequency.setValueAtTime(100+i*22, tt);
+  }
+  n.stop(t0+ms/1000);
+}
+
+const confetti=(function(){
+  const c=document.getElementById("confetti");
+  const ctx=c.getContext("2d");
+  let W,H,parts=[];
+
+  function resize(){
+    W=c.width=window.innerWidth;
+    H=c.height=window.innerHeight;
+  }
+
+  window.addEventListener("resize",resize);
+  resize();
+
+  function spawn(n=140){
+    for(let i=0;i<n;i++){
+      parts.push({
+        x:Math.random()*W,
+        y:-10,
+        vx:(Math.random()-0.5)*1.4,
+        vy:1+Math.random()*2.2,
+        s:4+Math.random()*6,
+        r:Math.random()*Math.PI,
+        vr:(Math.random()-0.5)*0.25
+      });
+    }
+  }
+
+  function tick(){
+    ctx.clearRect(0,0,W,H);
+    parts.forEach(p=>{
+      p.x+=p.vx;
+      p.y+=p.vy;
+      p.r+=p.vr;
+      ctx.save();
+      ctx.translate(p.x,p.y);
+      ctx.rotate(p.r);
+      ctx.fillStyle=`hsl(${(p.y/3+p.x/3)%360},90%,60%)`;
+      ctx.fillRect(-p.s/2,-p.s/2,p.s,p.s);
+      ctx.restore();
+    });
+    parts=parts.filter(p=>p.y<H+16);
+    requestAnimationFrame(tick);
+  }
+
+  tick();
+
+  return {
+    burst:()=>spawn(180)
+  };
+})();
+
+const introEl = document.getElementById("intro");
+const introLines = [
+  "心を落ち着け、ひとつ数字を心の中で決めてください。",
+  "私は、あなたの心を読み透かします。",
+  "表示される数字をしっかり見て、あなたの数字があれば「はい」、なければ「いいえ」を押してください。",
+  "準備ができたら「はじめる」を押しましょう。"
+];
+
+// 画面に出す文とは別に、読み上げ用の自然な言い回しを用意します。
+// 句読点を増やすことで、機械的に早口で読まれにくくしています。
+const introVoiceLines = [
+  "心を落ち着けてください。ひとつ数字を、心の中で、決めてください。",
+  "私は、あなたの心を、読み透かします。",
+  "表示される数字を、しっかり見てください。あなたの数字があれば、はい。なければ、いいえ。を押してください。",
+  "準備ができたら、はじめる。を押しましょう。"
+];
+
+let idx = 0;
+let introTimer = null;
+let introDelayTimer = null;
+let japaneseVoices = [];
+
+function loadJapaneseVoices(){
+  if(!("speechSynthesis" in window)) return;
+  japaneseVoices = window.speechSynthesis.getVoices().filter(v =>
+    (v.lang || "").toLowerCase().startsWith("ja") ||
+    /japanese|日本語|haruka|nanami|ayumi|kyoko|otoya/i.test(v.name || "")
+  );
+}
+
+if("speechSynthesis" in window){
+  loadJapaneseVoices();
+  window.speechSynthesis.onvoiceschanged = loadJapaneseVoices;
+}
+
+function getBestJapaneseVoice(){
+  if(!japaneseVoices.length) loadJapaneseVoices();
+  if(!japaneseVoices.length) return null;
+
+  const preferredNames = [
+    "Google 日本語",
+    "Microsoft Nanami",
+    "Microsoft Haruka",
+    "Microsoft Ayumi",
+    "Kyoko",
+    "Otoya"
+  ];
+
+  for(const key of preferredNames){
+    const found = japaneseVoices.find(v => (v.name || "").includes(key));
+    if(found) return found;
+  }
+
+  return japaneseVoices[0];
+}
+
+function speak(text){
+  if(muted) return;
+  if(!("speechSynthesis" in window)) return;
+
+  const utterance = new SpeechSynthesisUtterance(text);
+  utterance.lang = "ja-JP";
+
+  const voice = getBestJapaneseVoice();
+  if(voice) utterance.voice = voice;
+
+  // ゆっくり・低すぎない・少し落ち着いた読み上げに調整
+  utterance.rate = 0.78;
+  utterance.pitch = 1.02;
+  utterance.volume = 1;
+
+  window.speechSynthesis.speak(utterance);
+}
+
+function stopSpeech(){
+  if("speechSynthesis" in window){
+    window.speechSynthesis.cancel();
+  }
+}
+
+function typeLine(){
+  if(idx >= introLines.length) return;
+
+  const text = introLines[idx];
+  const voiceText = introVoiceLines[idx] || text;
+  let i = 0;
+
+  const line = document.createElement("div");
+  line.className = "fade";
+  introEl.appendChild(line);
+
+  // 表示と同じタイミングで、自然な読み上げ用テキストを1文ずつ読み上げます。
+  speak(voiceText);
+
+  introTimer = setInterval(() => {
+    line.textContent = text.slice(0, i + 1);
+    i++;
+
+    if(i >= text.length){
+      clearInterval(introTimer);
+      introTimer = null;
+      idx++;
+      introDelayTimer = setTimeout(typeLine, 650);
+    }
+  }, 60);
+}
+
+function restartIntroWithVoice(){
+  if(introTimer){
+    clearInterval(introTimer);
+    introTimer = null;
+  }
+  if(introDelayTimer){
+    clearTimeout(introDelayTimer);
+    introDelayTimer = null;
+  }
+  stopSpeech();
+  introEl.innerHTML = "";
+  idx = 0;
+  typeLine();
+}
+
+typeLine();
+
+const startBtn=document.getElementById("start");
+const howBtn=document.getElementById("how");
+const muteBtn=document.getElementById("mute");
+const qa=document.getElementById("qa");
+const final=document.getElementById("final");
+const rows=document.getElementById("rows");
+const promptEl=document.getElementById("prompt");
+const answerEl=document.getElementById("answer");
+const fortuneEl=document.getElementById("fortune");
+const stepEl=document.getElementById("step");
+const fillEl=document.getElementById("fill");
+const againBtn=document.getElementById("again");
+const introSec=document.getElementById("introSec");
+
+const cards=[];
+
+for(let i=0;i<QUESTION_COUNT;i++){
+  const card=[];
+  for(let n=1;n<=MAX_NUMBER;n++){
+    if((n>>i)&1) card.push(n);
+  }
+  card.sort(()=>Math.random()-0.5);
+  cards.push(card);
+}
+
+let sum=0;
+let step=0;
+
+function rangeLabel(min,max){
+  return `${min}〜${max}`;
+}
+
+function buildRanges(){
+  const ranges=[];
+  for(let lo=1; lo<=MAX_NUMBER; lo+=RANGE_SIZE){
+    const hi=Math.min(lo+RANGE_SIZE-1, MAX_NUMBER);
+    ranges.push([lo, hi]);
+  }
+  return ranges;
+}
+
+const RANGES = buildRanges();
+
+function renderCard(){
+  stepEl.textContent=step+1;
+  fillEl.style.width=((step)/QUESTION_COUNT*100)+"%";
+  promptEl.innerHTML="このカードにあなたの数字はありますか？";
+
+  const cur = cards[step].slice().sort((a,b)=>a-b);
+
+  rows.innerHTML = "";
+  let animIndex = 0;
+
+  RANGES.forEach(([lo,hi])=>{
+    const list = cur.filter(n => n>=lo && n<=hi);
+    if(list.length===0) return;
+
+    const row = document.createElement("div");
+    row.className = "row";
+
+    const label = document.createElement("div");
+    label.className = "rowlabel";
+    label.textContent = rangeLabel(lo,hi);
+    row.appendChild(label);
+
+    const grid = document.createElement("div");
+    grid.className = "rowgrid";
+
+    list.forEach((n)=>{
+      const d = document.createElement("div");
+      d.className = "num";
+      d.textContent = n;
+      d.style.animationDelay = (animIndex % 20) * 0.01 + "s";
+      animIndex++;
+      grid.appendChild(d);
+    });
+
+    row.appendChild(grid);
+    rows.appendChild(row);
+  });
+
+  ping({freq:720, dur:0.05, gain:0.05});
+}
+
+function start(){
+  ensureAudio();
+  stopSpeech();
+  ping();
+  introSec.classList.add("hidden");
+  qa.classList.remove("hidden");
+  renderCard();
+}
+
+function how(){
+  const howText = document.getElementById("howText");
+  howText.classList.toggle("hidden");
+}
+
+function press(yes){
+  if(yes) sum += Math.pow(2, step);
+  step++;
+
+  ping(
+    yes
+      ? {freq:880, dur:0.07, gain:0.07, type:"sine"}
+      : {freq:420, dur:0.07, gain:0.07, type:"sine"}
+  );
+
+  if(step<QUESTION_COUNT){
+    renderCard();
+  } else {
+    finish();
+  }
+}
+
+function finish(){
+  qa.classList.add("hidden");
+  final.classList.remove("hidden");
+
+  answerEl.textContent = "0";
+
+  drumroll(3000);
+
+  const target = sum;
+  let cur = 0;
+  const dur = 3000;
+  const t0 = performance.now();
+
+  function tick(now){
+    const p = Math.min(1, (now - t0) / dur);
+    const e = p * p * (3 - 2 * p);
+
+    cur = Math.floor(target * e);
+    answerEl.textContent = cur;
+
+    if(p < 1){
+      requestAnimationFrame(tick);
+    } else {
+      showFortune(target);
+      confetti.burst();
+    }
+  }
+
+  requestAnimationFrame(tick);
+}
+
+function showFortune(n){
+  let msg="";
+  if(n%7===0) msg="7の気配が強く出ています。直感が冴える日です。";
+  else if(n%5===0) msg="調和の気配があります。焦らず整えることで運が開きます。";
+  else if(n%2===0) msg="安定の気配があります。堅実な選択があなたを支えます。";
+  else if(n%3===0) msg="成長の気配があります。小さな一歩が流れを変えます。";
+  else msg="唯一無二の気配があります。そのひらめきを信じてください。";
+
+  fortuneEl.textContent = `あなたの心に浮かんだ数字は ${n} ですね。 ${msg}`;
+}
+
+startBtn.addEventListener("click", start);
+howBtn.addEventListener("click", how);
+
+muteBtn.addEventListener("click", ()=>{
+  ensureAudio();
+
+  if(!actx) return;
+
+  if(actx.state==="suspended"){
+    actx.resume();
+  }
+
+  muted=!muted;
+
+  if(muted){
+    stopSpeech();
+  } else if(!introSec.classList.contains("hidden")){
+    // スマホ等で自動読み上げが始まらない場合でも、
+    // サウンドをONに戻したタイミングで案内文を読み上げ直します。
+    restartIntroWithVoice();
+  }
+
+  muteBtn.setAttribute("aria-pressed", String(muted));
+  muteBtn.textContent = muted ? "🔇 サウンドOFF（クリックでON）" : "🔈 サウンドON/OFF";
+});
+
+document.getElementById("yes").addEventListener("click", ()=>press(true));
+document.getElementById("no").addEventListener("click", ()=>press(false));
+againBtn.addEventListener("click", ()=>location.reload());
+
+window.addEventListener("keydown",(e)=>{
+  if(qa.classList.contains("hidden")) return;
+
+  if(e.key==="y"||e.key==="Enter"){
+    press(true);
+  }
+
+  if(e.key==="n"||e.key==="Backspace"){
+    press(false);
+  }
+});
+</script>
+</body>
+</html>
